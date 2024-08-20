@@ -20,10 +20,16 @@ steps:
     java -version
   displayName: 'Set JAVA_HOME and Check Java Version'
 
-# Step 3: Checkout the code
+# Step 3: Configure Gradle to use Java 17
+- script: |
+    echo "org.gradle.java.home=$JAVA_HOME" >> gradle.properties
+    cat gradle.properties
+  displayName: 'Configure Gradle to Use Java 17'
+
+# Step 4: Checkout the code
 - checkout: self
 
-# Step 4: Run the Gradle build
+# Step 5: Run the Gradle build
 - task: Gradle@3
   inputs:
     gradleWrapperFile: 'gradlew'
@@ -40,7 +46,7 @@ steps:
       -Dspring.datasource.password=$(POSTGRES_ENV_POSTGRES_PASSWORD)
       -Dspring.profiles.active=$(SPRING_PROFILES_ACTIVE)
 
-# Step 5: Archive the build artifacts
+# Step 6: Archive the build artifacts
 - task: PublishBuildArtifacts@1
   inputs:
     PathtoPublish: 'build/libs'
