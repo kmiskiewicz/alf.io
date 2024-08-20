@@ -26,7 +26,8 @@ steps:
     tasks: 'clean build'
     publishJUnitResults: true
     testResultsFiles: '**/build/test-results/**/*.xml'
-    javaHomeOption: 'Path'    
+    javaHomeOption: 'JDKVersion'    
+    jdkVersionOption: '1.17'
     sonarQubeRunAnalysis: false
     spotBugsAnalysis: false
     options: |
