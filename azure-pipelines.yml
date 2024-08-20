@@ -29,11 +29,11 @@ steps:
 # Step 4: Checkout the code
 - checkout: self
 
-# Step 5: Run the Gradle build
+# Step 5: Run the Gradle build without tests
 - task: Gradle@3
   inputs:
     gradleWrapperFile: 'gradlew'
-    tasks: 'clean build'
+    tasks: 'distribution'
     publishJUnitResults: true
     testResultsFiles: '**/build/test-results/**/*.xml'
     javaHomeOption: 'Path'
@@ -41,11 +41,12 @@ steps:
     sonarQubeRunAnalysis: false
     spotBugsAnalysis: false
     options: |
-      --exclude-task test
+      -x test
       -Dspring.datasource.url=jdbc:postgresql://$(POSTGRES_PORT_5432_TCP_ADDR):$(POSTGRES_PORT_5432_TCP_PORT)/$(POSTGRES_ENV_POSTGRES_DB)
       -Dspring.datasource.username=$(POSTGRES_ENV_POSTGRES_USERNAME)
       -Dspring.datasource.password=$(POSTGRES_ENV_POSTGRES_PASSWORD)
       -Dspring.profiles.active=$(SPRING_PROFILES_ACTIVE)
+  displayName: 'Run Gradle Distribution Build (Skipping Tests)'
 
 # Step 6: Archive the build artifacts
 - task: PublishBuildArtifacts@1
@@ -53,3 +54,4 @@ steps:
     PathtoPublish: 'build/libs'
     ArtifactName: 'alfio'
     publishLocation: 'Container'
+  displayName: 'Archive Build Artifacts'
