@@ -4,7 +4,6 @@ trigger:
 pool:
   vmImage: 'ubuntu-latest'  # Use the latest Ubuntu image for the build agent
 
-
 steps:
 # Step 1: Install the required JDK (Java 17)
 - task: JavaToolInstaller@0
@@ -13,21 +12,26 @@ steps:
     jdkArchitectureOption: 'x64'
     jdkSourceOption: 'PreInstalled'
 
-# Step 2: Checkout the code
+# Step 2: Set JAVA_HOME and confirm Java version
 - script: |
-    echo "Setting JAVA_HOME to JDK 17 location."
+    export JAVA_HOME=$(JAVA_HOME_17_X64)
+    export PATH=$JAVA_HOME/bin:$PATH
+    echo "JAVA_HOME is set to $JAVA_HOME"
     java -version
-  displayName: 'Check Java Version'
-# Step 3: Run the Gradle build
+  displayName: 'Set JAVA_HOME and Check Java Version'
+
+# Step 3: Checkout the code
 - checkout: self
+
+# Step 4: Run the Gradle build
 - task: Gradle@3
   inputs:
     gradleWrapperFile: 'gradlew'
     tasks: 'clean build'
     publishJUnitResults: true
     testResultsFiles: '**/build/test-results/**/*.xml'
-    javaHomeOption: 'JDKVersion'    
-    jdkVersionOption: '1.17'
+    javaHomeOption: 'Path'
+    jdkDirectory: '$(JAVA_HOME)'
     sonarQubeRunAnalysis: false
     spotBugsAnalysis: false
     options: |
@@ -36,7 +40,7 @@ steps:
       -Dspring.datasource.password=$(POSTGRES_ENV_POSTGRES_PASSWORD)
       -Dspring.profiles.active=$(SPRING_PROFILES_ACTIVE)
 
-# Step 4: Archive the build artifacts
+# Step 5: Archive the build artifacts
 - task: PublishBuildArtifacts@1
   inputs:
     PathtoPublish: 'build/libs'
