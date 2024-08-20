@@ -1,0 +1,40 @@
+trigger:
+- main  # Adjust this to your default branch
+
+pool:
+  vmImage: 'ubuntu-latest'  # Use the latest Ubuntu image for the build agent
+
+
+steps:
+# Step 1: Install the required JDK (Java 17)
+- task: UseJavaVersion@1
+  inputs:
+    versionSpec: '17'
+    architecture: 'x64'
+
+# Step 2: Checkout the code
+- checkout: self
+
+# Step 3: Run the Gradle build
+- task: Gradle@2
+  inputs:
+    gradleWrapperFile: 'gradlew'
+    gradleOptions: '-Xmx3072m'
+    javaHomeOption: 'JDKVersion'
+    jdkVersionOption: '17'
+    jdkArchitectureOption: 'x64'
+    publishJUnitResults: true
+    testResultsFiles: '**/build/test-results/**/*.xml'
+    tasks: 'clean build'
+    options: |
+      -Dspring.datasource.url=jdbc:postgresql://$(POSTGRES_PORT_5432_TCP_ADDR):$(POSTGRES_PORT_5432_TCP_PORT)/$(POSTGRES_ENV_POSTGRES_DB)
+      -Dspring.datasource.username=$(POSTGRES_ENV_POSTGRES_USERNAME)
+      -Dspring.datasource.password=$(POSTGRES_ENV_POSTGRES_PASSWORD)
+      -Dspring.profiles.active=$(SPRING_PROFILES_ACTIVE)
+
+# Step 4: Archive the build artifacts
+- task: PublishBuildArtifacts@1
+  inputs:
+    PathtoPublish: 'build/libs'
+    ArtifactName: 'alfio'
+    publishLocation: 'Container'
