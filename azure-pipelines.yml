@@ -14,19 +14,21 @@ steps:
     jdkSourceOption: 'PreInstalled'
 
 # Step 2: Checkout the code
-- checkout: self
-
+- script: |
+    echo "Setting JAVA_HOME to JDK 17 location."
+    java -version
+  displayName: 'Check Java Version'
 # Step 3: Run the Gradle build
-- task: Gradle@2
+- checkout: self
+- task: Gradle@3
   inputs:
     gradleWrapperFile: 'gradlew'
-    gradleOptions: '-Xmx3072m'
-    javaHomeOption: 'JDKVersion'
-    jdkVersionOption: '17'
-    jdkArchitectureOption: 'x64'
+    tasks: 'clean build'
     publishJUnitResults: true
     testResultsFiles: '**/build/test-results/**/*.xml'
-    tasks: 'clean build'
+    javaHomeOption: 'Path'    
+    sonarQubeRunAnalysis: false
+    spotBugsAnalysis: false
     options: |
       -Dspring.datasource.url=jdbc:postgresql://$(POSTGRES_PORT_5432_TCP_ADDR):$(POSTGRES_PORT_5432_TCP_PORT)/$(POSTGRES_ENV_POSTGRES_DB)
       -Dspring.datasource.username=$(POSTGRES_ENV_POSTGRES_USERNAME)
