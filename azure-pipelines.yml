@@ -7,10 +7,11 @@ pool:
 
 steps:
 # Step 1: Install the required JDK (Java 17)
-- task: UseJavaVersion@1
+- task: JavaToolInstaller@0
   inputs:
     versionSpec: '17'
-    architecture: 'x64'
+    jdkArchitectureOption: 'x64'
+    jdkSourceOption: 'PreInstalled'
 
 # Step 2: Checkout the code
 - checkout: self
