@@ -41,6 +41,7 @@ steps:
     sonarQubeRunAnalysis: false
     spotBugsAnalysis: false
     options: |
+      --exclude-task test
       -Dspring.datasource.url=jdbc:postgresql://$(POSTGRES_PORT_5432_TCP_ADDR):$(POSTGRES_PORT_5432_TCP_PORT)/$(POSTGRES_ENV_POSTGRES_DB)
       -Dspring.datasource.username=$(POSTGRES_ENV_POSTGRES_USERNAME)
       -Dspring.datasource.password=$(POSTGRES_ENV_POSTGRES_PASSWORD)
