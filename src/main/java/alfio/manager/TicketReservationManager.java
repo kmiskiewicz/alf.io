@@ -116,6 +116,7 @@ import static alfio.util.Wrappers.optionally;
 import static alfio.util.checkin.TicketCheckInUtil.ticketOnlineCheckInUrl;
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
+import static java.util.Collections.singletonMap;
 import static java.util.Objects.requireNonNull;
 import static java.util.Objects.requireNonNullElse;
 import static java.util.stream.Collectors.*;
@@ -1146,7 +1147,7 @@ public class TicketReservationManager {
 
     /**
      * Get the total cost with VAT if it's not included in the ticket price.
-     * 
+     *
      * @param reservationId
      * @return
      */
@@ -1193,7 +1194,7 @@ public class TicketReservationManager {
 
     public String ticketOnlineCheckIn(Event event, String ticketId) {
         Ticket ticket = ticketRepository.findByUUID(ticketId);
-        
+
         return ticketOnlineCheckInUrl(event, ticket, configurationManager.baseUrl(event));
     }
 
@@ -1213,7 +1214,7 @@ public class TicketReservationManager {
     public Optional<TicketReservation> findByIdForEvent(String reservationId, int eventId) {
         return ticketReservationRepository.findOptionalReservationByIdAndEventId(reservationId, eventId);
     }
-    
+
     public Optional<TicketReservation> findById(String reservationId) {
         return ticketReservationRepository.findOptionalReservationById(reservationId);
     }
@@ -1508,7 +1509,7 @@ public class TicketReservationManager {
                         Validate.isTrue(result == 1);
                         Map<String, Object> model = TemplateResource.prepareModelForReminderTicketAdditionalInfo(organizationRepository.getById(event.getOrganizationId()), event, t, ReservationUtil.ticketUpdateUrl(event, t, configurationManager));
                         Locale locale = Optional.ofNullable(t.getUserLanguage()).map(LocaleUtil::forLanguageTag).orElseGet(() -> findReservationLanguage(t.getTicketsReservationId()));
-                        notificationManager.sendSimpleEmail(event, t.getTicketsReservationId(), t.getEmail(), messageSource.getMessage("reminder.ticket-additional-info.subject", 
+                        notificationManager.sendSimpleEmail(event, t.getTicketsReservationId(), t.getEmail(), messageSource.getMessage("reminder.ticket-additional-info.subject",
                         		new Object[]{event.getDisplayName()}, locale), () -> templateManager.renderTemplate(event, TemplateResource.REMINDER_TICKET_ADDITIONAL_INFO, model, locale));
                     });
             return null;
@@ -1538,7 +1539,7 @@ public class TicketReservationManager {
                         Map<String, Object> model = reservationHelper.prepareModelForReservationEmail(event, reservation);
                         ticketReservationRepository.updateLatestReminderTimestamp(reservation.getId(), ZonedDateTime.now(clockProvider.withZone(eventZoneId)));
                         Locale locale = findReservationLanguage(reservation.getId());
-                        notificationManager.sendSimpleEmail(event, reservation.getId(), reservation.getEmail(), messageSource.getMessage("reminder.ticket-not-assigned.subject", 
+                        notificationManager.sendSimpleEmail(event, reservation.getId(), reservation.getEmail(), messageSource.getMessage("reminder.ticket-not-assigned.subject",
                         		new Object[]{event.getDisplayName()}, locale), () -> templateManager.renderTemplate(event, TemplateResource.REMINDER_TICKETS_ASSIGNMENT_EMAIL, model, locale));
                     });
                 return null;
@@ -1605,11 +1606,13 @@ public class TicketReservationManager {
             ticketCategoryDescription, additionalServiceItems, asi -> additionalServiceManager.loadItemTitle(asi, locale));
         notificationManager.sendSimpleEmail(event, null, organization.getEmail(), messageSource.getMessage("email-ticket-released.admin.subject", new Object[]{ticket.getId(), event.getDisplayName()}, locale),
         		() -> templateManager.renderTemplate(event, TemplateResource.TICKET_HAS_BEEN_CANCELLED_ADMIN, adminModel, locale));
-
+        Map<String, String> modifications = singletonMap("publicUuid", String.valueOf(ticket.getPublicUuid()));
+        String modificationJson = json.asJsonString(List.of(modifications));
         int deletedValues = purchaseContextFieldRepository.deleteAllValuesForTicket(ticket.getId());
+
         log.debug("deleting {} field values for ticket {}", deletedValues, ticket.getId());
 
-        auditingRepository.insert(reservationId, null, event.getId(), Audit.EventType.CANCEL_TICKET, new Date(), Audit.EntityType.TICKET, Integer.toString(ticket.getId()));
+        auditingRepository.insert(reservationId, null, event.getId(), Audit.EventType.CANCEL_TICKET, new Date(), Audit.EntityType.TICKET, Integer.toString(ticket.getId()), modificationJson);
 
         if(ticketRepository.countTicketsInReservation(reservationId) == 0 && transactionRepository.loadOptionalByReservationId(reservationId).isEmpty()) {
             removeReservation(event, ticketReservation, false, null);
