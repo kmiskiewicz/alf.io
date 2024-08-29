@@ -326,6 +326,17 @@ public class TicketReservationManager {
 
         Optional<PromoCodeDiscount> dynamicDiscount = createDynamicPromoCode(discount, event, list, reservationId);
 
+        discount.ifPresent(d -> {
+            if (d.getMaxUsage() != null) {
+                promoCodeDiscountRepository.lockForCount(d.getId());
+                var discountedCategories = d.getCategories();
+                var appliedDiscountCount = CollectionUtils.isEmpty(discountedCategories) ? list.size() : list.stream().filter(t -> discountedCategories.contains(t.getTicketCategoryId())).count();
+                if (d.getMaxUsage() < promoCodeDiscountRepository.countUsedPromoCode(d.getId()) + appliedDiscountCount) {
+                    throw new TooManyTicketsForDiscountCodeException();
+                }
+            }
+        });
+
         ticketReservationRepository.createNewReservation(reservationId,
             event.now(clockProvider),
             reservationExpiration, dynamicDiscount.or(() -> discount).map(PromoCodeDiscount::getId).orElse(null),
@@ -707,12 +718,12 @@ public class TicketReservationManager {
         TicketReservation reservation = ticketReservationRepository.findReservationById(reservationId);
         if(reservation.getPromoCodeDiscountId() != null) {
             final PromoCodeDiscount promoCode = promoCodeDiscountRepository.findById(reservation.getPromoCodeDiscountId());
-            if(promoCode.getMaxUsage() == null) {
+            if (promoCode.getMaxUsage() == null) {
                 return false;
             }
             int currentTickets = ticketReservationRepository.countTicketsInReservationForCategories(reservationId, categoriesOrNull(promoCode));
             return Boolean.TRUE.equals(serializedTransactionTemplate.execute(status -> {
-                Integer confirmedPromoCode = promoCodeDiscountRepository.countConfirmedPromoCode(promoCode.getId(), categoriesOrNull(promoCode), reservationId, categoriesOrNull(promoCode) != null ? "X" : null);
+                Integer confirmedPromoCode = promoCodeDiscountRepository.countConfirmedPromoCode(promoCode.getId());
                 return promoCode.getMaxUsage() < currentTickets + confirmedPromoCode;
             }));
         }
@@ -1550,12 +1561,11 @@ public class TicketReservationManager {
         return configurationManager.getShortReservationID(event, findById(reservationId).orElseThrow());
     }
 
-
-    public int countAvailableTickets(EventAndOrganizationId event, TicketCategory category) {
+    public CategoryAvailability countAvailableTickets(EventAndOrganizationId event, TicketCategory category) {
         if(category.isBounded()) {
-            return ticketRepository.countFreeTickets(event.getId(), category.getId());
+            return ticketRepository.getCategoryAvailability(event.getId(), category.getId());
         }
-        return ticketRepository.countFreeTicketsForUnbounded(event.getId());
+        return ticketRepository.getUnboundedCategoryAvailability(event.getId(), category.getId());
     }
 
     public void releaseTicket(Event event, TicketReservation ticketReservation, final Ticket ticket) {
@@ -2047,27 +2057,16 @@ public class TicketReservationManager {
 
     public Optional<String> createSubscriptionReservation(SubscriptionDescriptor subscriptionDescriptor,
                                                           Locale locale,
-                                                          BindingResult bindingResult,
                                                           Principal principal) {
-        return createSubscriptionReservation(subscriptionDescriptor, locale, bindingResult, principal, SubscriptionMetadata.empty());
+        return createSubscriptionReservation(subscriptionDescriptor, locale, principal, SubscriptionMetadata.empty());
     }
 
     public Optional<String> createSubscriptionReservation(SubscriptionDescriptor subscriptionDescriptor,
                                                           Locale locale,
-                                                          BindingResult bindingResult,
                                                           Principal principal,
                                                           SubscriptionMetadata metadata) {
         Date expiration = DateUtils.addMinutes(new Date(), getReservationTimeout(subscriptionDescriptor));
-        try {
-            return Optional.of(createSubscriptionReservation(subscriptionDescriptor, expiration, locale, retrievePublicUserId(principal), metadata));
-        } catch (CannotProceedWithPayment cannotProceedWithPayment) {
-            bindingResult.reject("error.STEP_1_PAYMENT_METHODS_ERROR");
-            log.error("missing payment methods", cannotProceedWithPayment);
-        } catch (NotEnoughTicketsException nex) {
-            log.error("cannot acquire subscription", nex);
-            bindingResult.reject("show-subscription.sold-out.message");
-        }
-        return Optional.empty();
+        return Optional.of(createSubscriptionReservation(subscriptionDescriptor, expiration, locale, retrievePublicUserId(principal), metadata));
     }
 
     public Optional<String> createTicketReservation(Event event,
@@ -2075,32 +2074,17 @@ public class TicketReservationManager {
                                                     List<ASReservationWithOptionalCodeModification> additionalServices,
                                                     Optional<String> promoCodeDiscount,
                                                     Locale locale,
-                                                    BindingResult bindingResult,
                                                     Principal principal) {
         Date expiration = DateUtils.addMinutes(new Date(), getReservationTimeout(event));
-        try {
-            var reservationId = createTicketReservation(event,
-                list,
-                additionalServices,
-                expiration,
-                promoCodeDiscount,
-                locale,
-                false,
-                principal);
-            return Optional.of(reservationId);
-        } catch (NotEnoughTicketsException | NotEnoughItemsException nete) {
-            bindingResult.reject(ErrorsCode.STEP_1_NOT_ENOUGH_TICKETS);
-        } catch (MissingSpecialPriceTokenException missing) {
-            bindingResult.reject(ErrorsCode.STEP_1_ACCESS_RESTRICTED);
-        } catch (InvalidSpecialPriceTokenException invalid) {
-            bindingResult.reject(ErrorsCode.STEP_1_CODE_NOT_FOUND);
-        } catch (TooManyTicketsForDiscountCodeException tooMany) {
-            bindingResult.reject(ErrorsCode.STEP_2_DISCOUNT_CODE_USAGE_EXCEEDED);
-        } catch (CannotProceedWithPayment cannotProceedWithPayment) {
-            bindingResult.reject(ErrorsCode.STEP_1_CATEGORIES_NOT_COMPATIBLE);
-            log.error("missing payment methods", cannotProceedWithPayment);
-        }
-        return Optional.empty();
+        var reservationId = createTicketReservation(event,
+            list,
+            additionalServices,
+            expiration,
+            promoCodeDiscount,
+            locale,
+            false,
+            principal);
+        return Optional.of(reservationId);
     }
 
     boolean canProceedWithPayment(PurchaseContext purchaseContext, TotalPrice totalPrice, String reservationId) {

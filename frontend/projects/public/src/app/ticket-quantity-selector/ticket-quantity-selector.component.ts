@@ -17,12 +17,22 @@ export class TicketQuantitySelectorComponent {
   @Input()
   quantityRange: number[];
 
+  @Input()
+  refreshInProgress: boolean = false;
+
   @Output()
   valueChange = new EventEmitter<number>();
+
+  @Output()
+  refreshCommand = new EventEmitter<number>();
 
   formGroup: UntypedFormGroup;
 
   selectionChanged(): void {
     this.valueChange.next(this.parentGroup.get('amount').value);
+  }
+
+  refreshCategories(): void {
+    this.refreshCommand.next(new Date().getTime());
   }
 }

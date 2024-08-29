@@ -49,6 +49,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.util.UriComponentsBuilder;
+import org.springframework.web.util.UriUtils;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -253,6 +254,7 @@ public class IndexController {
                     style.appendChild(new Text(baseCustomCss));
                     head.appendChild(style);
                 }
+                head.appendChild(buildMetaTag("authentication-enabled", Boolean.toString(configurationManager.isPublicOpenIdEnabled())));
                 preloadEventData(eventShortName, request, session, eventLoader, head, messageSourceManager, idx, json, lang);
                 JFiveParse.serialize(idx, osw);
             }
@@ -332,8 +334,9 @@ public class IndexController {
     }
 
     private static Element buildScripTag(String content, String type, String id, String param) {
+        var encodedContent = UriUtils.encodeFragment(content, StandardCharsets.UTF_8);
         var e = new Element("script");
-        e.appendChild(new Text(content));
+        e.appendChild(new Text(encodedContent));
         e.setAttribute("type", type);
         e.setAttribute("id", id);
         if (param != null) {

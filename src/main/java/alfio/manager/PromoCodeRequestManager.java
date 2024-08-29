@@ -184,7 +184,7 @@ public class PromoCodeRequestManager {
     }
 
     private boolean isDiscountCodeUsageExceeded(PromoCodeDiscount discount) {
-        return discount.getMaxUsage() != null && discount.getMaxUsage() <= promoCodeRepository.countConfirmedPromoCode(discount.getId(), categoriesOrNull(discount), null, categoriesOrNull(discount) != null ? "X" : null);
+        return discount.getMaxUsage() != null && discount.getMaxUsage() <= promoCodeRepository.countConfirmedPromoCode(discount.getId());
     }
 
     private Pair<Optional<String>, BindingResult> makeSimpleReservation(Event event,
@@ -212,7 +212,7 @@ public class PromoCodeRequestManager {
                                                      Optional<String> promoCodeDiscount,
                                                      Principal principal) {
         return ReservationUtil.validateCreateRequest(reservation, bindingResult, ticketReservationManager, eventManager, additionalServiceManager, promoCodeDiscount.orElse(null), event)
-            .flatMap(selected -> ticketReservationManager.createTicketReservation(event, selected.getLeft(), selected.getRight(), promoCodeDiscount, locale, bindingResult, principal));
+            .flatMap(selected -> ReservationUtil.handleReservationCreationErrors(() -> ticketReservationManager.createTicketReservation(event, selected.getLeft(), selected.getRight(), promoCodeDiscount, locale, principal), bindingResult, event.getType()));
     }
 
     public Optional<PromoCodeDiscount> findById(int id) {
@@ -228,7 +228,7 @@ public class PromoCodeRequestManager {
         if(code.isEmpty()) {
             return 0;
         }
-        return promoCodeRepository.countConfirmedPromoCode(promoCodeId, categoriesOrNull(code.get()), null, categoriesOrNull(code.get()) != null ? "X" : null);
+        return promoCodeRepository.countConfirmedPromoCode(promoCodeId);
     }
 
     public List<PromoCodeUsageResult> retrieveDetailedUsage(int promoCodeId, Integer eventId) {

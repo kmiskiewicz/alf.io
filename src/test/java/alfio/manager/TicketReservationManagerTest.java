@@ -101,6 +101,7 @@ class TicketReservationManagerTest {
     private static final String ORG_EMAIL = "org@org.org";
     private static final String EVENT_CURRENCY = "CHF";
     private static final String CATEGORY_CURRENCY = "EUR";
+    private static final int OFFLINE_PAYMENT_DEFAULT_DAYS = 2;
 
 
     private TicketReservationManager trm;
@@ -527,7 +528,7 @@ class TicketReservationManagerTest {
 
     private void initOfflinePaymentTest() {
         when(configurationManager.getFor(eq(OFFLINE_PAYMENT_DAYS), any()))
-            .thenReturn(new MaybeConfiguration(OFFLINE_PAYMENT_DAYS, new ConfigurationKeyValuePathLevel(OFFLINE_PAYMENT_DAYS.getValue(), "2", null)));
+            .thenReturn(new MaybeConfiguration(OFFLINE_PAYMENT_DAYS, new ConfigurationKeyValuePathLevel(OFFLINE_PAYMENT_DAYS.getValue(), String.valueOf(OFFLINE_PAYMENT_DEFAULT_DAYS), null)));
         when(event.getZoneId()).thenReturn(ClockProvider.clock().getZone());
     }
 
@@ -536,7 +537,7 @@ class TicketReservationManagerTest {
         initOfflinePaymentTest();
         when(event.getBegin()).thenReturn(ZonedDateTime.now(ClockProvider.clock()).plusDays(3));
         ZonedDateTime offlinePaymentDeadline = BankTransferManager.getOfflinePaymentDeadline(new PaymentContext(event), configurationManager);
-        ZonedDateTime expectedDate = ZonedDateTime.now(ClockProvider.clock()).plusDays(2L).truncatedTo(ChronoUnit.HALF_DAYS).with(WorkingDaysAdjusters.defaultWorkingDays());
+        ZonedDateTime expectedDate = ZonedDateTime.from(WorkingDaysAdjusters.addDays(ZonedDateTime.now(ClockProvider.clock()).truncatedTo(ChronoUnit.HALF_DAYS), OFFLINE_PAYMENT_DEFAULT_DAYS));
         Assertions.assertEquals(expectedDate, offlinePaymentDeadline);
     }
 
@@ -706,11 +707,11 @@ class TicketReservationManagerTest {
         //count how many tickets yet available for a category
         when(ticketCategory.isBounded()).thenReturn(true);
         trm.countAvailableTickets(event, ticketCategory);
-        verify(ticketRepository).countFreeTickets(eq(EVENT_ID), eq(TICKET_CATEGORY_ID));
+        verify(ticketRepository).getCategoryAvailability(eq(EVENT_ID), eq(TICKET_CATEGORY_ID));
         //count how many tickets are available for unbounded categories
         when(ticketCategory.isBounded()).thenReturn(false);
         trm.countAvailableTickets(event, ticketCategory);
-        verify(ticketRepository).countFreeTicketsForUnbounded(eq(EVENT_ID));
+        verify(ticketRepository).getUnboundedCategoryAvailability(eq(EVENT_ID), eq(TICKET_CATEGORY_ID));
     }
 
     private void initReleaseTicket() {
