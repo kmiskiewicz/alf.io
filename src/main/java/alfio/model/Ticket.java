@@ -132,7 +132,7 @@ public class Ticket implements TicketInfoContainer {
      * @return
      */
     public String ticketCode(String eventKey, boolean caseInsensitive) {
-        return uuid.toString(); //;+ '/' + hmacTicketInfo(eventKey, caseInsensitive);
+        return publicUuid.toString(); //;+ '/' + hmacTicketInfo(eventKey, caseInsensitive);
     }
 
     public String hmacTicketInfo(String eventKey, boolean caseInsensitive) {
