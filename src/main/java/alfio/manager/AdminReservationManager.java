@@ -128,6 +128,7 @@ public class AdminReservationManager {
     private final ReservationEmailContentHelper reservationEmailContentHelper;
     private final TransactionRepository transactionRepository;
     private final AccessService accessService;
+    private final Json json;
 
     //the following methods have an explicit transaction handling, therefore the @Transactional annotation is not helpful here
     Result<Triple<TicketReservation, List<Ticket>, PurchaseContext>> confirmReservation(PurchaseContextType purchaseContextType,
@@ -1026,8 +1027,8 @@ public class AdminReservationManager {
 
         Integer userId = userRepository.findIdByUserName(username).orElse(null);
         Date date = new Date();
-
-        ticketIds.forEach(id -> auditingRepository.insert(reservationId, userId, purchaseContext.getId(), CANCEL_TICKET, date, TICKET, id.toString()));
+        List<Ticket> tickets = ticketRepository.findByIds(ticketIds);
+        tickets.forEach(ticket -> auditingRepository.insert(reservationId, userId, purchaseContext.getId(), CANCEL_TICKET, date, TICKET, String.valueOf(ticket.getId()),json.asJsonString(singletonList(singletonMap("publicUuid", String.valueOf(ticket.getPublicUuid())))) ));
 
         ticketRepository.resetCategoryIdForUnboundedCategoriesWithTicketIds(ticketIds);
         purchaseContextFieldRepository.deleteAllValuesForTicketIds(ticketIds);

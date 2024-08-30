@@ -1583,7 +1583,7 @@ public class TicketReservationManager {
             throw new IllegalStateException("Cannot release reserved tickets");
         }
         //Preserve the publicUUID
-        Map<String, String> modifications = singletonMap("publicUuid", String.valueOf(ticket.getPublicUuid()));
+        List<Map<String, String>> modifications = singletonList(singletonMap("publicUuid", String.valueOf(ticket.getPublicUuid())));
         //
         invalidateAccess(event, ticket, false);
 
@@ -1609,7 +1609,7 @@ public class TicketReservationManager {
         notificationManager.sendSimpleEmail(event, null, organization.getEmail(), messageSource.getMessage("email-ticket-released.admin.subject", new Object[]{ticket.getId(), event.getDisplayName()}, locale),
         		() -> templateManager.renderTemplate(event, TemplateResource.TICKET_HAS_BEEN_CANCELLED_ADMIN, adminModel, locale));
 
-        String modificationJson = json.asJsonString(List.of(modifications));
+        String modificationJson = json.asJsonString(modifications);
         int deletedValues = purchaseContextFieldRepository.deleteAllValuesForTicket(ticket.getId());
 
         log.debug("deleting {} field values for ticket {}", deletedValues, ticket.getId());
