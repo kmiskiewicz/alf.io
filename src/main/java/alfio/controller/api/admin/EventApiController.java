@@ -45,6 +45,7 @@ import alfio.repository.SponsorScanRepository;
 import alfio.util.*;
 import com.fasterxml.jackson.databind.MappingIterator;
 import com.fasterxml.jackson.dataformat.csv.CsvMapper;
+import com.fasterxml.jackson.dataformat.csv.CsvParser;
 import com.fasterxml.jackson.dataformat.csv.CsvSchema;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -325,8 +326,8 @@ public class EventApiController {
     
     @PutMapping("/events/reallocate")
     public String reallocateTickets(@RequestBody TicketAllocationModification form, Principal principal) {
-        accessService.checkCategoryOwnership(principal, form.getEventId(), Set.of(form.getSrcCategoryId(), form.getTargetCategoryId()));
-        eventManager.reallocateTickets(form.getSrcCategoryId(), form.getTargetCategoryId(), form.getEventId());
+        var event = accessService.checkCategoryOwnership(principal, form.getEventId(), Set.of(form.getSrcCategoryId(), form.getTargetCategoryId()));
+        eventManager.reallocateTickets(form.getSrcCategoryId(), form.getTargetCategoryId(), event);
         return OK;
     }
 
@@ -355,7 +356,8 @@ public class EventApiController {
     }
 
     private static final String PAYMENT_METHOD = "Payment Method";
-    private static final List<String> FIXED_FIELDS = Arrays.asList("ID", "Category", "Event", "Status", "OriginalPrice", "PaidPrice", "Discount", "VAT", "ReservationID", "Full Name", "First Name", "Last Name", "E-Mail", "Locked", "Language", "Confirmation", "Billing Address", "Country Code", "Payment ID", PAYMENT_METHOD);
+    private static final String EXTERNAL_REFERENCE = "External Reference";
+    static final List<String> FIXED_FIELDS = Arrays.asList("ID", "Category", "Event", "Status", "OriginalPrice", "PaidPrice", "Discount", "VAT", "ReservationID", "Full Name", "First Name", "Last Name", "E-Mail", "Locked", "Language", "Confirmation", "Billing Address", "Country Code", "Payment ID", PAYMENT_METHOD, EXTERNAL_REFERENCE);
     private static final List<SerializablePair<String, String>> FIXED_PAIRS = FIXED_FIELDS.stream().map(f -> SerializablePair.of(f, f)).collect(toList());
     private static final String FISCAL_CODE = "Fiscal Code";
     private static final String REFERENCE_TYPE = "Reference Type";
@@ -434,6 +436,7 @@ public class EventApiController {
                 if(paymentIdRequested) { line.add(Objects.toString(transaction.map(Transaction::getPaymentId).orElse(null), transaction.map(Transaction::getTransactionId).orElse(""))); }
                 if(paymentGatewayRequested) { line.add(transaction.map(tr -> tr.getPaymentProxy().name()).orElse("")); }
             }
+            if(fields.contains(EXTERNAL_REFERENCE)) {line.add(t.getExtReference());}
 
             if(eInvoicingEnabled) {
                 var billingDetails = trs.getBillingDetails();
@@ -585,10 +588,14 @@ public class EventApiController {
         record Transaction(String reservationId, BigDecimal price) {}
         var csvMapper = new CsvMapper();
         try(InputStreamReader isr = new InputStreamReader(file.getInputStream(), UTF_8)) {
-            MappingIterator<Transaction> iterator = csvMapper.readerFor(Transaction.class)
+            MappingIterator<List<String>> iterator = csvMapper.readerFor(Transaction.class)
                 .with(CsvSchema.emptySchema().withoutHeader())
+                .with(CsvParser.Feature.WRAP_AS_ARRAY)
                 .readValues(isr);
-            var all = iterator.readAll();
+            var all = iterator.readAll().stream()
+                .filter(line -> line.size() > 1)
+                .map(line -> new Transaction(line.get(0), new BigDecimal(line.get(1))))
+                .toList();
 
             var reservationIds = all.stream()
                 .map(Transaction::reservationId)

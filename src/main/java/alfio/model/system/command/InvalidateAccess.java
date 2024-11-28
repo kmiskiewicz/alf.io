@@ -25,26 +25,10 @@ import java.util.Objects;
 /**
  * Signals that access for the ticket must be invalidated on external systems
  */
-public class InvalidateAccess {
-    private final Ticket ticket;
-    private final TicketMetadataContainer ticketMetadataContainer;
-    private final Event event;
+public record InvalidateAccess(Ticket ticket, TicketMetadataContainer ticketMetadataContainer, Event event) {
 
-    public InvalidateAccess(Ticket ticket, TicketMetadataContainer ticketMetadataContainer, Event event) {
-        this.ticket = ticket;
-        this.ticketMetadataContainer = ticketMetadataContainer;
-        this.event = event;
-    }
-
-    public Ticket getTicket() {
-        return ticket;
-    }
-
-    public TicketMetadataContainer getTicketMetadataContainer() {
+    @Override
+    public TicketMetadataContainer ticketMetadataContainer() {
         return Objects.requireNonNullElseGet(ticketMetadataContainer, TicketMetadataContainer::empty);
-    }
-
-    public Event getEvent() {
-        return event;
     }
 }

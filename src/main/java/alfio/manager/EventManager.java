@@ -84,6 +84,7 @@ import static alfio.model.TicketCategory.TicketCheckInStrategy.ONCE_PER_EVENT;
 import static alfio.model.modification.DateTimeModification.atZone;
 import static alfio.model.system.ConfigurationKeys.CHECK_IN_COLOR_CONFIGURATION;
 import static alfio.util.EventUtil.*;
+import static alfio.util.MiscUtils.removeTabsAndNewlines;
 import static alfio.util.Wrappers.optionally;
 import static java.lang.String.format;
 import static java.util.Arrays.asList;
@@ -506,23 +507,22 @@ public class EventManager {
         ticketCategoryRepository.fixDates(tc.getId(), inception, newExpiration);
     }
 
-    public void reallocateTickets(int srcCategoryId, int targetCategoryId, int eventId) {
-        EventAndOrganizationId event = eventRepository.findEventAndOrganizationIdById(eventId);
-        reallocateTickets(ticketCategoryRepository.findStatisticWithId(srcCategoryId, eventId), Optional.of(ticketCategoryRepository.getByIdAndActive(targetCategoryId, event.getId())), event);
+    public void reallocateTickets(int srcCategoryId, int targetCategoryId, EventAndOrganizationId event) {
+        reallocateTickets(ticketCategoryRepository.findStatisticWithId(srcCategoryId, event.getId()), Optional.of(ticketCategoryRepository.getByIdAndActive(targetCategoryId, event.getId())), event);
     }
 
     void reallocateTickets(TicketCategoryStatisticView src, Optional<TicketCategory> target, EventAndOrganizationId event) {
         int notSoldTickets = src.getNotSoldTicketsCount();
-        if(notSoldTickets == 0) {
+        if (notSoldTickets == 0) {
             log.debug("since all the ticket have been sold, ticket moving is not needed anymore.");
             return;
         }
         List<Integer> lockedTickets = ticketRepository.selectTicketInCategoryForUpdate(event.getId(), src.getId(), notSoldTickets, singletonList(TicketStatus.FREE.name()));
         int locked = lockedTickets.size();
-        if(locked != notSoldTickets) {
+        if (locked != notSoldTickets) {
             throw new IllegalStateException("Expected %d free tickets, got %d.".formatted(notSoldTickets, locked));
         }
-        ticketCategoryRepository.updateSeatsAvailability(src.getId(), src.getSoldTicketsCount());
+        ticketCategoryRepository.updateSeatsAvailability(src.getId(), src.getMaxTickets() - locked);
         if(target.isPresent()) {
             TicketCategory targetCategory = target.get();
             ticketCategoryRepository.updateSeatsAvailability(targetCategory.getId(), targetCategory.getMaxTickets() + locked);
@@ -1048,7 +1048,7 @@ public class EventManager {
             int[] results = jdbcTemplate.batchUpdate(ticketCategoryRepository.updateOrdinal(), parameterSources);
             Validate.isTrue(IntStream.of(results).sum() == categories.size(), "Unexpected result from update.");
         } else {
-            log.warn("unauthorized access to event {}", eventName);
+            log.warn("unauthorized access to event {}", removeTabsAndNewlines(eventName));
         }
     }
 

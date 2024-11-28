@@ -54,6 +54,7 @@ import java.util.stream.Stream;
 
 import static alfio.config.Initializer.*;
 import static alfio.model.system.ConfigurationKeys.*;
+import static alfio.util.MiscUtils.removeTabsAndNewlines;
 
 @Component
 @AllArgsConstructor
@@ -77,7 +78,9 @@ public class GoogleWalletManager {
     public Optional<Pair<EventAndOrganizationId, Ticket>> validateTicket(String eventName, String ticketUuid) {
         var eventOptional = eventRepository.findOptionalEventAndOrganizationIdByShortName(eventName);
         if (eventOptional.isEmpty()) {
-            log.trace("event {} not found", eventName);
+            if (log.isTraceEnabled()) {
+                log.trace("event {} not found", removeTabsAndNewlines(eventName));
+            }
             return Optional.empty();
         }
 
@@ -99,15 +102,15 @@ public class GoogleWalletManager {
     @EventListener
     public void invalidateAccessForTicket(InvalidateAccess invalidateAccess) {
         try {
-            Map<ConfigurationKeys, String> passConf = getConfigurationKeys(invalidateAccess.getEvent());
+            Map<ConfigurationKeys, String> passConf = getConfigurationKeys(invalidateAccess.event());
             if (!passConf.isEmpty()) {
-                invalidateAccess.getTicketMetadataContainer()
+                invalidateAccess.ticketMetadataContainer()
                     .getMetadataForKey(TicketMetadataContainer.GENERAL)
                     .map(m -> m.getAttributes().get(WALLET_OBJECT_ID))
-                    .ifPresent(s -> invalidateObject(invalidateAccess.getTicket().getUuid(), s, passConf));
+                    .ifPresent(s -> invalidateObject(invalidateAccess.ticket().getUuid(), s, passConf));
             }
         } catch (Exception e) {
-            log.warn("Error while invalidating access for ticket " + invalidateAccess.getTicket().getUuid(), e);
+            log.warn("Error while invalidating access for ticket " + invalidateAccess.ticket().getUuid(), e);
         }
     }
 

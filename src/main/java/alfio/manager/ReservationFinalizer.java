@@ -67,6 +67,7 @@ import static alfio.manager.system.AdminJobExecutor.JobName.RETRY_RESERVATION_CO
 import static alfio.model.Audit.EventType.SUBSCRIPTION_ACQUIRED;
 import static alfio.model.TicketReservation.TicketReservationStatus.*;
 import static alfio.model.system.ConfigurationKeys.*;
+import static alfio.util.MiscUtils.removeTabsAndNewlines;
 import static alfio.util.ReservationUtil.hasPrivacyPolicy;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
@@ -345,7 +346,9 @@ public class ReservationFinalizer {
     }
 
     private void acquireSubscription(PaymentProxy paymentProxy, String reservationId, PurchaseContext purchaseContext, CustomerName customerName, String email) {
-        log.debug("Acquiring subscriptions for reservation {}; payment method: {}", reservationId, paymentProxy);
+        if (log.isDebugEnabled()) {
+            log.debug("Acquiring subscriptions for reservation {}; payment method: {}", removeTabsAndNewlines(reservationId), paymentProxy);
+        }
         var subscriptionDescriptor = (SubscriptionDescriptor) purchaseContext;
         ZonedDateTime validityFrom = null;
         ZonedDateTime validityTo = null;
@@ -481,8 +484,8 @@ public class ReservationFinalizer {
             var transaction = transactionOptional.get();
             transactionRepository.update(transaction.getId(), transactionId, null, transactionTimestamp,
                 platformFee, 0L, Transaction.Status.COMPLETE, buildTransactionMetadata(transactionMetadataModification));
-        } else {
-            log.warn("ON-Site check-in: ignoring transaction registration for reservationId {}", reservationId);
+        } else if(log.isWarnEnabled()) {
+            log.warn("ON-Site check-in: ignoring transaction registration for reservationId {}", removeTabsAndNewlines(reservationId));
         }
     }
 

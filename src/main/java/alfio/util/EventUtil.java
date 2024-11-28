@@ -33,13 +33,13 @@ import biweekly.io.text.ICalWriter;
 import biweekly.property.Method;
 import biweekly.property.Organizer;
 import biweekly.property.Status;
-import lombok.extern.log4j.Log4j2;
 import org.apache.commons.lang3.RegExUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.flywaydb.core.api.MigrationVersion;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.util.Assert;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.IOException;
@@ -55,8 +55,7 @@ import java.util.function.BiFunction;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
-import static alfio.model.EventCheckInInfo.VERSION_FOR_CODE_CASE_INSENSITIVE;
-import static alfio.model.EventCheckInInfo.VERSION_FOR_LINKED_ADDITIONAL_SERVICE;
+import static alfio.model.EventCheckInInfo.*;
 import static alfio.model.system.ConfigurationKeys.*;
 import static java.time.temporal.ChronoField.*;
 
@@ -82,8 +81,8 @@ public final class EventUtil {
         .appendLiteral('Z')
         .toFormatter(Locale.ROOT);
 
-    public static boolean displayWaitingQueueForm(Event event, List<SaleableTicketCategory> categories, ConfigurationManager configurationManager, Predicate<EventAndOrganizationId> noTicketsAvailable) {
-        var confVal = configurationManager.getFor(List.of(STOP_WAITING_QUEUE_SUBSCRIPTIONS, ENABLE_PRE_REGISTRATION, ENABLE_WAITING_QUEUE), event.getConfigurationLevel());
+    public static boolean displayWaitingQueueForm(Event event, List<SaleableTicketCategory> categories, Map<ConfigurationKeys, ConfigurationManager. MaybeConfiguration> confVal, Predicate<EventAndOrganizationId> noTicketsAvailable) {
+        Assert.isTrue(confVal.keySet().containsAll(Set.of(STOP_WAITING_QUEUE_SUBSCRIPTIONS, ENABLE_PRE_REGISTRATION, ENABLE_WAITING_QUEUE)), "Configuration must contains the specified key STOP_WAITING_QUEUE_SUBSCRIPTIONS, ENABLE_PRE_REGISTRATION, ENABLE_WAITING_QUEUE");
         return !confVal.get(STOP_WAITING_QUEUE_SUBSCRIPTIONS).getValueAsBooleanOrDefault()
             && checkWaitingQueuePreconditions(event, categories, noTicketsAvailable, confVal);
     }
@@ -297,5 +296,10 @@ public final class EventUtil {
     public static boolean supportsLinkedAdditionalServices(String version) {
         return version != null
             && MigrationVersion.fromVersion(version).compareTo(MigrationVersion.fromVersion(VERSION_FOR_LINKED_ADDITIONAL_SERVICE)) >= 0;
+    }
+
+    public static boolean supportsAdditionalItemsOrdinal(String version) {
+        return version != null
+            && MigrationVersion.fromVersion(version).compareTo(MigrationVersion.fromVersion(VERSION_FOR_ADDITIONAL_ITEMS_ORDINAL)) >= 0;
     }
 }

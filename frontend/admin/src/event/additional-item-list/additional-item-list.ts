@@ -6,7 +6,9 @@ import {Task} from "@lit/task";
 import {AlfioEvent, ContentLanguage} from "../../model/event.ts";
 import {
     AdditionalItem,
-    AdditionalItemType, isMandatory,
+    AdditionalItemLocalizedContent,
+    AdditionalItemType,
+    isMandatory,
     isMandatoryPercentage,
     supplementPolicyDescriptions
 } from "../../model/additional-item.ts";
@@ -32,6 +34,10 @@ interface ListData {
     allowDownload: boolean;
 }
 
+interface EnhancedAdditionalItemLocalizedContent extends AdditionalItemLocalizedContent {
+    localeLabel: string;
+}
+
 @customElement('alfio-additional-item-list')
 export class AdditionalItemList extends LitElement {
 
@@ -46,19 +52,17 @@ export class AdditionalItemList extends LitElement {
     @state()
     editActive: boolean = false;
     @state()
-    allowDownload: boolean = false;
-    @state()
     refreshCount: number = 0;
 
-    private retrievePageDataTask = new Task<ReadonlyArray<string>, Model>(this,
+    private readonly retrievePageDataTask = new Task<ReadonlyArray<string>, Model>(this,
         async ([publicIdentifier]) => {
             const event = (await EventService.load(publicIdentifier)).event;
-            const dataTask = new Task<ReadonlyArray<number>, ListData>(this, async ([]) => {
+            const dataTask = new Task<ReadonlyArray<number>, ListData>(this, async (_) => {
                 const [items, count] = await Promise.all([AdditionalItemService.loadAll({eventId: event.id}), AdditionalItemService.useCount(event.id)]);
                 return {
                     items: items.filter(i => i.type === this.type),
                     usageCount: count,
-                    allowDownload: Object.values(count).some(p => Object.values(p).reduce((pv: number, cv: number) => pv + cv) > 0),
+                    allowDownload: Object.values(count).some(p => Object.values(p).reduce((pv: number, cv: number) => pv + cv, 0) > 0),
                 }
             }, () => [this.refreshCount]);
             return {
@@ -72,7 +76,7 @@ export class AdditionalItemList extends LitElement {
         },
         () => [this.publicIdentifier!]);
 
-    static styles = [pageHeader, textColors, css`
+    static readonly styles = [pageHeader, textColors, css`
         .item {
             width: 100%;
             margin-bottom: 1rem;
@@ -86,6 +90,17 @@ export class AdditionalItemList extends LitElement {
             display: flex;
             align-items: center;
             justify-content: end;
+            gap: 1em;
+        }
+
+        .item [slot='footer'].multiple {
+            justify-content: space-between;
+        }
+
+        .item [slot='footer'] > div.button-container {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
             gap: 1em;
         }
 
@@ -135,6 +150,16 @@ export class AdditionalItemList extends LitElement {
             justify-content: space-between;
             align-items: center;
         }
+
+        .pb-2 {
+            padding-bottom: 2rem;
+        }
+
+        .download-container {
+            display: flex;
+            align-items: center;
+            justify-content: end;
+        }
     `];
 
     render() {
@@ -146,31 +171,27 @@ export class AdditionalItemList extends LitElement {
                     <h3>
                         <sl-icon name=${model.icon}></sl-icon> ${model.title}
                     </h3>
-                    ${ this.allowDownload ?
-                        html`<sl-button href=${`/admin/api/events/${model.event.publicIdentifier}/additional-services/${this.type}/export`} target="_blank" rel="noopener">
-                                <sl-icon name="download"></sl-icon> Export purchased items
-                            </sl-button>` : nothing}
                 </div>
 
                 ${this.iterateItems(model)}
 
-                ${this.generateFooter(model)}
-
+                <div class="pb-2"></div>
                 `
         });
     }
 
-    async addNew(model: Model): Promise<void> {
+    async addNew(model: Model, count: number): Promise<void> {
         this.editActive = true;
-        await this.openEditDialog(model, null);
+        const ordinal = model.event.supportsAdditionalServicesOrdinal ? count + 1 : 0;
+        await this.openEditDialog(model, null, ordinal);
     }
 
     async edit(item: AdditionalItem, model: Model): Promise<void> {
         this.editActive = true;
-        await this.openEditDialog(model, item);
+        await this.openEditDialog(model, item, item.ordinal);
     }
 
-    private async openEditDialog(model: Model, item: AdditionalItem | null): Promise<void> {
+    private async openEditDialog(model: Model, item: AdditionalItem | null, ordinal: number): Promise<void> {
         const div = document.createElement('div');
         div.innerHTML = `
           <alfio-additional-item-edit></alfio-additional-item-edit>
@@ -186,7 +207,8 @@ export class AdditionalItemList extends LitElement {
             supportedLanguages: model.event.contentLanguages,
             event: model.event,
             type: this.type!,
-            editedItem: item
+            editedItem: item,
+            ordinal: ordinal
         });
 
     }
@@ -206,6 +228,7 @@ export class AdditionalItemList extends LitElement {
                         message: 'Additional Option successfully deleted'
                     }, this);
                     this.triggerListRefresh();
+                    return true;
                 } else {
                     dispatchFeedback({
                         type: 'danger',
@@ -219,7 +242,7 @@ export class AdditionalItemList extends LitElement {
         }
     }
 
-    private generateFooter(model: Model): TemplateResult {
+    private generateFooter(model: Model, listData: ListData): TemplateResult {
         const warning = () => html`
             <div class="alert alert-warning">
                 <p><span class="fa fa-warning"></span> Cannot add <span>${model.type === 'DONATION' ? 'donations' : 'additional options'}</span> to an event marked as "free of charge".</p>
@@ -228,7 +251,7 @@ export class AdditionalItemList extends LitElement {
         const footer = () => html`
             <div class="row">
                 <div class="col-xs-12" style="font-size: 20px">
-                    <sl-button type="button" variant="success" @click=${() => this.addNew(model)} size="large">
+                    <sl-button type="button" variant="success" @click=${() => this.addNew(model, listData.items.length)} size="large">
                         <sl-icon name="plus-circle" slot="prefix"></sl-icon>
                         Add new
                     </sl-button>
@@ -237,69 +260,142 @@ export class AdditionalItemList extends LitElement {
         return when(model.event.freeOfCharge, warning, () => renderIf(() => !this.editActive, footer));
     }
 
+    private sortContentLanguages(item: AdditionalItem, model: Model): EnhancedAdditionalItemLocalizedContent[] {
+        return model.event.contentLanguages
+            .filter(cl => {
+                return item.description.some(d => d.locale === cl.locale)
+            }).map(cl => {
+                return {
+                    localeLabel: cl.displayLanguage,
+                    ...item.description.find(d => d.locale === cl.locale)!
+                };
+            });
+    }
+
     private iterateItems(model: Model) {
+
         return model.dataTask.render({
             initial: () => html`loading...`,
-            complete: listData => html`${repeat(listData.items, (item) => item.id, (item) => {
-                return html`
-                <div id=${`additional-service-${item.id}`}></div>
-                <sl-card class="item">
-                    <div slot="header">
-                        <div class="col">${showItemTitle(item)}</div>
-                        <div class="text-success"> ${`Confirmed: ${formatSoldCount(listData, item.id)}`}</div>
-                    </div>
-                    <div slot="footer">
-                        <sl-button variant="default" title="edit" @click=${() => this.edit(item, model)} type="button"><sl-icon name="pencil" slot="prefix"></sl-icon> edit</sl-button>
-                        ${renderIf(() => countUsage(listData, item.id) === 0, () => html`<sl-button title="delete" variant="danger" @click=${() => this.delete(item, model)} type="button"><sl-icon name="trash" slot="prefix"></sl-icon> delete</sl-button>`)}
-                    </div>
-                    <div class="body">
-                        <div class="info-container">
-                            <div class="info">
-                                <strong>Inception</strong>
-                                <sl-format-date date=${item.inception.date + 'T' + item.inception.time} month="long" day="numeric" year="numeric" hour="numeric" minute="numeric"></sl-format-date>
-                            </div>
-                            <div class="info">
-                                <strong>Expiration</strong>
-                                <sl-format-date date=${item.expiration.date + 'T' + item.expiration.time} month="long" day="numeric" year="numeric" hour="numeric" minute="numeric"></sl-format-date>
-                            </div>
-                            <div class="info">
-                                <strong>Price</strong>
-                                ${when(item.fixPrice,
-                                    () => this.showItemFixPrice(item),
-                                    () => html`<span>User-defined</span>`)}
-                            </div>
-                            ${renderIf(() => item.type === 'SUPPLEMENT', () => html`
-                                <div class="info">
-                                    <strong>Policy</strong>
-                                    ${supplementPolicyDescriptions[item.supplementPolicy]}
-                                </div>`)}
-
-                            ${renderIf(() => item.fixPrice && (item.type === 'DONATION' || (!isMandatory(item.supplementPolicy) && item.supplementPolicy !== 'OPTIONAL_UNLIMITED_AMOUNT')),
-                    () => html`
-                                <div class="info">
-                                    <strong>Max Qty per ${item.supplementPolicy === 'OPTIONAL_MAX_AMOUNT_PER_TICKET' ? 'ticket' : 'order'}</strong>
-                                    ${item.maxQtyPerOrder}
-                                </div>`)}
+            complete: listData => html`
+                ${this.displayDownloadButton(listData, model)}
+                ${repeat(listData.items, (item) => item.id, (item, index) => {
+                    return html`
+                    <div id=${`additional-service-${item.id}`}></div>
+                    <sl-card class="item">
+                        <div slot="header">
+                            <div class="col">${showItemTitle(item)}</div>
+                            <div class="text-success"> ${`Confirmed: ${formatSoldCount(listData, item.id)}`}</div>
                         </div>
+                        <div slot="footer" class="${model.event.supportsAdditionalServicesOrdinal && listData.items.length > 1 ? 'multiple': ''}">
+                            ${this.renderMoveButtons(listData, index, item, model)}
+                            <div class="button-container">
+                                <sl-button variant="default" title="edit" @click=${() => this.edit(item, model)} type="button"><sl-icon name="pencil" slot="prefix"></sl-icon> edit</sl-button>
+                                ${renderIf(() => countUsage(listData, item.id) === 0, () => html`<sl-button title="delete" variant="danger" @click=${() => this.delete(item, model)} type="button"><sl-icon name="trash" slot="prefix"></sl-icon> delete</sl-button>`)}
+                            </div>
+                        </div>
+                        <div class="body">
+                            <div class="info-container">
+                                <div class="info">
+                                    <strong>Inception</strong>
+                                    <sl-format-date date=${item.inception.date + 'T' + item.inception.time} month="long" day="numeric" year="numeric" hour="numeric" minute="numeric"></sl-format-date>
+                                </div>
+                                <div class="info">
+                                    <strong>Expiration</strong>
+                                    <sl-format-date date=${item.expiration.date + 'T' + item.expiration.time} month="long" day="numeric" year="numeric" hour="numeric" minute="numeric"></sl-format-date>
+                                </div>
+                                <div class="info">
+                                    <strong>Price</strong>
+                                    ${when(item.fixPrice,
+                                        () => this.showItemFixPrice(item),
+                                        () => html`<span>User-defined</span>`)}
+                                </div>
+                                ${renderIf(() => item.type === 'SUPPLEMENT', () => html`
+                                    <div class="info">
+                                        <strong>Policy</strong>
+                                        ${supplementPolicyDescriptions[item.supplementPolicy]}
+                                    </div>`)}
 
-                        <sl-tab-group>
-                            ${repeat(item.description, d => d.id, (d) => html`
-                                <sl-tab slot="nav" panel=${d.locale}>${d.locale}</sl-tab>
-                                <sl-tab-panel name=${d.locale}>
-                                    <div class="panel-content">
-                                        <alfio-display-commonmark-preview data-button-text="Preview" data-text=${d.value}></alfio-display-commonmark-preview>
-                                        <div class="ps">${d.value}</div>
-                                    </div>
-                                </sl-tab-panel>
+                                ${renderIf(() => item.fixPrice && (item.type === 'DONATION' || (!isMandatory(item.supplementPolicy) && item.supplementPolicy !== 'OPTIONAL_UNLIMITED_AMOUNT')),
+                        () => html`
+                                    <div class="info">
+                                        <strong>Max Qty per ${item.supplementPolicy === 'OPTIONAL_MAX_AMOUNT_PER_TICKET' ? 'ticket' : 'order'}</strong>
+                                        ${item.maxQtyPerOrder}
+                                    </div>`)}
+                            </div>
 
-                            `)}
+                            <sl-tab-group>
+                                ${repeat(this.sortContentLanguages(item, model), d => d.locale, (d) => html`
+                                    <sl-tab slot="nav" panel=${d.locale}>${d.localeLabel}</sl-tab>
+                                    <sl-tab-panel name=${d.locale}>
+                                        <div class="panel-content">
+                                            <alfio-display-commonmark-preview data-button-text="Preview" data-text=${d.value}></alfio-display-commonmark-preview>
+                                            <div class="ps">${d.value}</div>
+                                        </div>
+                                    </sl-tab-panel>
 
-                        </sl-tab-group>
-                    </div>
-                </sl-card>
+                                `)}
+
+                            </sl-tab-group>
+                        </div>
+                    </sl-card>
+                `
+                })}
+                ${this.generateFooter(model, listData)}
             `
-            })}`
         })
+    }
+
+    private displayDownloadButton(listData: ListData, model: Model) {
+        if (listData.allowDownload) {
+            return html`
+                <div class="download-container pb-2">
+                    <sl-button href=${`/admin/api/events/${model.event.publicIdentifier}/additional-services/${this.type}/export`} target="_blank" rel="noopener">
+                                <sl-icon name="download"></sl-icon> Export purchased items
+                    </sl-button>
+                </div>`;
+        }
+        return nothing;
+    }
+
+    private renderMoveButtons(listData: ListData, index: number, item: AdditionalItem, model: Model) {
+        return renderIf(() => model.event.supportsAdditionalServicesOrdinal && listData.items.length > 1, () => html`
+            <div class="button-container">
+                ${renderIf(() => index > 0 && item.ordinal !== 0, () => html`
+                    <sl-button variant="default" title="move up" @click=${() => this.moveItem(model.event.id, listData, item, index, 'up')} type="button"><sl-icon name="arrow-up" slot="prefix"></sl-icon> move up</sl-button>
+                `)}
+                ${renderIf(() => index < listData.items.length - 1 && item.ordinal !== 0, () => html`
+                    <sl-button variant="default" title="move down" @click=${() => this.moveItem(model.event.id, listData, item, index, 'down')} type="button"><sl-icon name="arrow-down" slot="prefix"></sl-icon> move down</sl-button>
+                `)}
+            </div>
+        `);
+    }
+
+    private async moveItem(eventId: number,
+                           listData: ListData,
+                           item: AdditionalItem,
+                           index: number,
+                           direction: 'up' | 'down'): Promise<void> {
+        const items = listData.items;
+        let toSwap: AdditionalItem;
+        if (direction === 'up') {
+            // swap the item with the preceding one
+            toSwap = items[index - 1];
+        } else {
+            toSwap = items[index + 1];
+        }
+        const response = await AdditionalItemService.swapItems(eventId, item.id, toSwap.id);
+        if (response.ok) {
+            dispatchFeedback({
+                type: 'success',
+                message: 'Operation completed successfully'
+            }, this);
+            this.triggerListRefresh();
+        } else {
+            dispatchFeedback({
+                type: 'danger',
+                message: 'Error while swapping items'
+            }, this);
+        }
     }
 
     private showItemFixPrice(item: AdditionalItem): TemplateResult {

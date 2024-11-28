@@ -53,6 +53,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 import static alfio.model.system.ConfigurationKeys.*;
+import static alfio.util.MiscUtils.removeTabsAndNewlines;
 
 @Component
 @AllArgsConstructor
@@ -259,14 +260,18 @@ public class PassKitManager {
 
         var eventOptional = eventRepository.findOptionalEventAndOrganizationIdByShortName(eventName);
         if(eventOptional.isEmpty()) {
-            log.trace("event {} not found", eventName);
+            if (log.isTraceEnabled()) {
+                log.trace("event {} not found", removeTabsAndNewlines(eventName));
+            }
             return Optional.empty();
         }
 
         var event = eventOptional.get();
         var typeIdentifierOptional = configurationManager.getFor(PASSBOOK_TYPE_IDENTIFIER, event.getConfigurationLevel());
         if(!typeIdentifierOptional.isPresent() || !typeIdentifier.equals(typeIdentifierOptional.getValueOrNull())) {
-            log.trace("typeIdentifier does not match. Expected {}, got {}", typeIdentifierOptional.getValueOrDefault("not-found"), typeIdentifier);
+            if (log.isTraceEnabled()) {
+                log.trace("typeIdentifier does not match. Expected {}, got {}", typeIdentifierOptional.getValueOrDefault("not-found"), removeTabsAndNewlines(typeIdentifier));
+            }
             return Optional.empty();
         }
         return ticketRepository.findOptionalByUUID(ticketUuid)

@@ -21,42 +21,10 @@ import alfio.model.api.v1.admin.subscription.Owner;
 
 import java.util.List;
 
-public class ReservationDetail {
-    private final String id;
-    private final TicketReservation.TicketReservationStatus status;
-    private final ReservationUser user;
-    private final List<AttendeesByCategory> tickets;
-    private final List<Owner> subscriptionOwners;
+public record ReservationDetail(String id,
+                                TicketReservation.TicketReservationStatus status,
+                                ReservationUser user,
+                                List<AttendeesByCategory> tickets,
+                                List<Owner> subscriptionOwners) {
 
-    public ReservationDetail(String id,
-                             TicketReservation.TicketReservationStatus status,
-                             ReservationUser user,
-                             List<AttendeesByCategory> tickets,
-                             List<Owner> subscriptionOwners) {
-        this.id = id;
-        this.status = status;
-        this.user = user;
-        this.tickets = tickets;
-        this.subscriptionOwners = subscriptionOwners;
-    }
-
-    public String getId() {
-        return id;
-    }
-
-    public TicketReservation.TicketReservationStatus getStatus() {
-        return status;
-    }
-
-    public ReservationUser getUser() {
-        return user;
-    }
-
-    public List<AttendeesByCategory> getTickets() {
-        return tickets;
-    }
-
-    public List<Owner> getSubscriptionOwners() {
-        return subscriptionOwners;
-    }
 }

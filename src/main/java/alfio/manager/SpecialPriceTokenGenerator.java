@@ -25,7 +25,6 @@ import alfio.model.system.ConfigurationKeys;
 import alfio.repository.EventRepository;
 import alfio.repository.SpecialPriceRepository;
 import alfio.repository.TicketCategoryRepository;
-import lombok.extern.log4j.Log4j2;
 import org.apache.commons.lang3.time.StopWatch;
 import org.apache.commons.text.RandomStringGenerator;
 import org.slf4j.Logger;
@@ -80,7 +79,7 @@ public class SpecialPriceTokenGenerator {
         stopWatch.start();
         specialPriceRepository.findWaitingElements().forEach(this::generateCode);
         stopWatch.stop();
-        log.trace("end. Took {} ms", stopWatch.getTime());
+        log.trace("end. Took {} ms", stopWatch.getDuration().toMillis());
     }
 
     public void generatePendingCodesForCategory(int categoryId) {
